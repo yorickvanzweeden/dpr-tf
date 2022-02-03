@@ -34,6 +34,8 @@ from tensorflow.keras import layers
 from transformers import AutoTokenizer
 from transformers import AutoTokenizer, TFAutoModel
 
+GLOBAL_BATCH_SIZE = os.environ['GLOBAL_BATCH_SIZE']
+
 
 """
 ## Load and Preprocess Dataset
