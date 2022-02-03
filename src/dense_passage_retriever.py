@@ -325,7 +325,7 @@ def process_examples(dicts):
     return queries, answer_indexes, processed_passages
 
 
-def extracted_passage_embeddings(processed_passages, model_config):
+def extracted_passage_embeddings(tokenizer, processed_passages, model_config):
     """Extract Passage Embeddings"""
     passage_inputs = tokenizer.batch_encode_plus(
         processed_passages,
@@ -347,7 +347,7 @@ def extracted_passage_embeddings(processed_passages, model_config):
     return passage_embeddings
 
 
-def extracted_query_embeddings(queries, model_config):
+def extracted_query_embeddings(tokenizer, queries, model_config):
     """Extract Query Embeddings"""
     query_inputs = tokenizer.batch_encode_plus(
         queries,
