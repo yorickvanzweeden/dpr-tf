@@ -36,126 +36,8 @@ from transformers import AutoTokenizer, TFAutoModel
 
 
 """
-## Download Dataset
-First we need to download train and test dataset from public data source.
-"""
-
-"""shell
-wget https://dl.fbaipublicfiles.com/dpr/data/retriever/biencoder-nq-adv-hn-train.json.gz
-gunzip biencoder-nq-adv-hn-train.json.gz
-wget https://dl.fbaipublicfiles.com/dpr/data/retriever/biencoder-nq-dev.json.gz
-gunzip biencoder-nq-dev.json.gz
-"""
-
-"""
-## Data & Model Configuration Setup
-"""
-
-# Configure dataset
-@dataclass
-class DataConfig:
-    num_positives = 1  # No. of positive
-    num_hard_negatives = 1  # No of hard negatives
-
-
-data_config = DataConfig()
-
-# Configure models
-@dataclass
-class ModelConfig:
-    passage_max_seq_len = 156
-    query_max_seq_len = 64
-    batch_size_per_replica = 128
-    epochs = 40
-    learning_rate = 2e-5
-    num_warmup_steps = 1234
-    dropout = 0.1
-    model_name = "google/bert_uncased_L-4_H-512_A-8"
-
-
-model_config = ModelConfig()
-
-"""
 ## Load and Preprocess Dataset
 """
-
-
-def read_dpr_json(
-    file,
-    max_samples=None,
-    num_hard_negatives=1,
-    num_positives=1,
-    shuffle_negatives=True,
-    shuffle_positives=False,
-):
-    """Read Json file and reture list of dicts"""
-
-    dicts = json.load(open(file, encoding="utf-8"))
-
-    # Query key options
-    query_json_keys = ["question", "questions", "query"]
-
-    # Positive key options
-    positive_context_json_keys = [
-        "positive_contexts",
-        "positive_ctxs",
-        "positive_context",
-        "positive_ctx",
-    ]
-
-    # Hard Negative key options
-    hard_negative_json_keys = [
-        "hard_negative_contexts",
-        "hard_negative_ctxs",
-        "hard_negative_context",
-        "hard_negative_ctx",
-    ]
-    standard_dicts = []
-    for i in tqdm_notebook(range(len(dicts))):
-        dict = dicts[i]
-        sample = {}
-        positive_passages = []
-        negative_passages = []
-        for key, val in dict.items():
-            if key in query_json_keys:
-                sample["query"] = val
-            elif key in positive_context_json_keys:
-                if shuffle_positives:
-                    random.shuffle(val)
-                for passage in val[:num_positives]:
-                    positive_passages.append(
-                        {
-                            "title": passage["title"],
-                            "text": passage["text"],
-                            "label": "positive",
-                        }
-                    )
-            elif key in hard_negative_json_keys:
-                if shuffle_negatives:
-                    random.shuffle(val)
-                for passage in val[:num_hard_negatives]:
-                    negative_passages.append(
-                        {
-                            "title": passage["title"],
-                            "text": passage["text"],
-                            "label": "hard_negative",
-                        }
-                    )
-        # Place Positive passage first and then negative passages
-        # This will be used to make in-batch labels for loss calculation.
-        sample["passages"] = positive_passages + negative_passages
-        if len(sample["passages"]) == num_positives + num_hard_negatives:
-            standard_dicts.append(sample)
-        if max_samples:
-            if len(standard_dicts) == max_samples:
-                break
-    return standard_dicts
-
-
-# Read training json file
-dicts = read_dpr_json(
-    "biencoder-nq-adv-hn-train.json", max_samples=6400, num_hard_negatives=1
-)
 
 
 def encode_query_passage(tokenizer, dicts, model_config, data_config):
@@ -219,11 +101,6 @@ def encode_query_passage(tokenizer, dicts, model_config, data_config):
     }
 
 
-# Load Pretrained tokenizer
-tokenizer = AutoTokenizer.from_pretrained(model_config.model_name)
-# Encoder queries and passages
-X = encode_query_passage(tokenizer, dicts, model_config, data_config)
-
 """
 ## Model Preparation
 """
@@ -263,16 +140,15 @@ class PassageModel(tf.keras.Model):
         return pooled_output
 
 
-def cross_replica_concat(values):
-    """Get concat values from all replica"""
+def cross_replica_concat(values, v_shape):
 
     context = tf.distribute.get_replica_context()
     gathered = context.all_gather(values, axis=0)
 
     return tf.roll(
-        gathered,
-        -context.replica_id_in_sync_group * values.shape[0],
-        axis=0,
+      gathered,
+      -context.replica_id_in_sync_group * values.shape[0], #v_shape,#values.shape[0],
+      axis=0
     )
 
 
@@ -393,53 +269,8 @@ class BiEncoderModel(tf.keras.Model):
 
 
 """
-## Model Building and Training
-"""
-
-BATCH_SIZE_PER_REPLICA = model_config.batch_size_per_replica
-GLOBAL_BATCH_SIZE = BATCH_SIZE_PER_REPLICA * strategy.num_replicas_in_sync
-N_EPOCHS = model_config.epochs
-one_epoch_steps = int(len(dicts) / GLOBAL_BATCH_SIZE)
-num_train_steps = one_epoch_steps * N_EPOCHS
-num_warmup_steps = num_train_steps // 10
-
-# Define model under strategy scope
-with strategy.scope():
-    query_encoder = QueryModel(model_config)
-    passage_encoder = PassageModel(model_config)
-    bi_model = BiEncoderModel(
-        query_encoder,
-        passage_encoder,
-        num_passages_per_question=data_config.num_positives
-        + data_config.num_hard_negatives,
-        model_config=model_config,
-    )
-    optimizer, lr_schedule = create_optimizer(
-        init_lr=model_config.learning_rate,
-        num_train_steps=num_train_steps,
-        num_warmup_steps=num_warmup_steps,
-    )
-    bi_model.compile(optimizer=optimizer)
-
-with strategy.scope():
-    train_ds = (
-        tf.data.Dataset.from_tensor_slices(X)
-        .shuffle(GLOBAL_BATCH_SIZE * 10)
-        .prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-        .batch(GLOBAL_BATCH_SIZE, drop_remainder=True)
-    )
-
-# Train on TPU
-bi_model.fit(train_ds, epochs=N_EPOCHS)
-
-"""
 ## Model Evaluation
 """
-
-# Read dev json for evaluation
-eval_dicts = read_dpr_json(
-    "biencoder-nq-dev.json", num_hard_negatives=30, shuffle_negatives=False
-)
 
 
 def combine_title_context(titles, texts):
@@ -490,11 +321,6 @@ def process_examples(dicts):
     return queries, answer_indexes, processed_passages
 
 
-# Process examples for evaluation
-queries, answer_indexes, processed_passages = process_examples(eval_dicts)
-print(len(processed_passages), len(queries))
-
-
 def extracted_passage_embeddings(processed_passages, model_config):
     """Extract Passage Embeddings"""
     passage_inputs = tokenizer.batch_encode_plus(
@@ -515,9 +341,6 @@ def extracted_passage_embeddings(processed_passages, model_config):
         verbose=1,
     )
     return passage_embeddings
-
-
-passage_embeddings = extracted_passage_embeddings(processed_passages, model_config)
 
 
 def extracted_query_embeddings(queries, model_config):
@@ -542,14 +365,6 @@ def extracted_query_embeddings(queries, model_config):
     return query_embeddings
 
 
-query_embeddings = extracted_query_embeddings(queries, model_config)
-
-
-# Load into Faiss
-faiss_index = faiss.IndexFlatL2(768)
-faiss_index.add(passage_embeddings)
-
-
 def get_k_accuracy(faiss_index, query_embeddings, answer_indexes, k):
 
     prob, index = faiss_index.search(query_embeddings, k=k)
@@ -561,30 +376,3 @@ def get_k_accuracy(faiss_index, query_embeddings, answer_indexes, k):
         if i_count > 0:
             corrects.append((i, answer_indexes[i]))
     return corrects
-
-
-# Calculate Top-k Acc.
-top10_corrects = get_k_accuracy(faiss_index, query_embeddings, answer_indexes, k=10)
-top20_corrects = get_k_accuracy(faiss_index, query_embeddings, answer_indexes, k=20)
-top50_corrects = get_k_accuracy(faiss_index, query_embeddings, answer_indexes, k=50)
-top100_corrects = get_k_accuracy(faiss_index, query_embeddings, answer_indexes, k=100)
-top1000_corrects = get_k_accuracy(faiss_index, query_embeddings, answer_indexes, k=1000)
-
-
-results = pd.DataFrame(
-    {
-        "topK": [10, 20, 50, 100, 1000],
-        "total": [len(query_embeddings)] * 5,
-        "correct_total": [
-            len(top10_corrects),
-            len(top20_corrects),
-            len(top50_corrects),
-            len(top100_corrects),
-            len(top1000_corrects),
-        ],
-    }
-)
-
-# Show results
-results["accuracy"] = (results["correct_total"] / results["total"]) * 100
-print(results)
