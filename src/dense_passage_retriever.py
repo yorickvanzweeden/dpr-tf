@@ -163,6 +163,7 @@ class BiEncoderModel(tf.keras.Model):
         passage_encoder,
         num_passages_per_question,
         model_config,
+        strategy,
         *args,
         **kwargs
     ):
@@ -176,7 +177,8 @@ class BiEncoderModel(tf.keras.Model):
         self.num_passages_per_question = num_passages_per_question
         # Model configuration
         self.model_config = model_config
-
+        # Execution strategy (colab)
+        self.strategy = strategy
         # Loss tracker
         self.loss_tracker = keras.metrics.Mean(name="loss")
         # Define loss
@@ -256,7 +258,7 @@ class BiEncoderModel(tf.keras.Model):
             )
 
             loss = self.calculate_loss(similarity_scores)
-            loss = loss / strategy.num_replicas_in_sync
+            loss = loss / self.strategy.num_replicas_in_sync
 
         # Backward pass
         gradients = tape.gradient(loss, self.trainable_variables)
