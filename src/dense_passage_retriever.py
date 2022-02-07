@@ -267,6 +267,27 @@ class BiEncoderModel(tf.keras.Model):
         self.loss_tracker.update_state(loss)
         return {"loss": self.loss_tracker.result()}
 
+    def test_step(self, X):
+        # Call encoder models
+        passage_embeddings = self.passage_forward(X)
+        query_embeddings = self.query_forward(X)
+
+        # Get all replica concat values for In-Batch loss calculation
+        global_passage_embeddings = cross_replica_concat(passage_embeddings, 32)
+        global_query_embeddings = cross_replica_concat(query_embeddings, 16)
+
+        # Dot product similarity
+        similarity_scores = tf.linalg.matmul(
+            global_query_embeddings, global_passage_embeddings, transpose_b=True
+        )
+
+        loss = self.calculate_loss(similarity_scores)
+        loss = loss / self.strategy.num_replicas_in_sync
+
+        # Monitor loss
+        self.loss_tracker.update_state(loss)
+        return {"loss": self.loss_tracker.result()}
+
     @property
     def metrics(self):
         return [self.loss_tracker]
