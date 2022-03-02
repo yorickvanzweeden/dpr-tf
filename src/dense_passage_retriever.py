@@ -221,6 +221,11 @@ class BiEncoderModel(tf.keras.Model):
         input_ids = tf.reshape(X["passage_input_ids"], input_shape)
         attention_mask = tf.reshape(X["passage_attention_mask"], input_shape)
         token_type_ids = tf.reshape(X["passage_token_type_ids"], input_shape)
+        
+        input_ids = tf.cast(input_ids, tf.int32)
+        attention_mask = tf.cast(attention_mask, tf.int32)
+        token_type_ids = tf.cast(token_type_ids, tf.int32)
+
         # Call passage encoder model
         outputs = self.passage_encoder(
             [input_ids, attention_mask, token_type_ids], training=True
@@ -236,6 +241,11 @@ class BiEncoderModel(tf.keras.Model):
         input_ids = tf.reshape(X["query_input_ids"], input_shape)
         attention_mask = tf.reshape(X["query_attention_mask"], input_shape)
         token_type_ids = tf.reshape(X["query_token_type_ids"], input_shape)
+
+        input_ids = tf.cast(input_ids, tf.int32)
+        attention_mask = tf.cast(attention_mask, tf.int32)
+        token_type_ids = tf.cast(token_type_ids, tf.int32)
+        
         outputs = self.query_encoder(
             [input_ids, attention_mask, token_type_ids], training=True
         )
