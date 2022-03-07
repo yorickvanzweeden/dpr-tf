@@ -34,8 +34,6 @@ from tensorflow.keras import layers
 from transformers import AutoTokenizer
 from transformers import AutoTokenizer, TFAutoModel
 
-GLOBAL_BATCH_SIZE = int(os.environ['GLOBAL_BATCH_SIZE'])
-
 
 """
 ## Load and Preprocess Dataset
@@ -164,6 +162,7 @@ class BiEncoderModel(tf.keras.Model):
         num_passages_per_question,
         model_config,
         strategy,
+        global_batch_size,
         *args,
         **kwargs
     ):
@@ -186,6 +185,8 @@ class BiEncoderModel(tf.keras.Model):
             reduction=keras.losses.Reduction.NONE, from_logits=True
         )
 
+        self.global_batch_size = global_batch_size
+
     def calculate_loss(self, logits):
         """Function to calculate in batch loss"""
 
@@ -201,14 +202,14 @@ class BiEncoderModel(tf.keras.Model):
                 i
                 for i in range(
                     0,
-                    (GLOBAL_BATCH_SIZE * self.num_passages_per_question),
+                    (self.global_batch_size * self.num_passages_per_question),
                     self.num_passages_per_question,
                 )
             ]
         )
 
         loss = self.loss_fn(labels, logits)
-        scale_loss = tf.reduce_sum(loss) * (1.0 / GLOBAL_BATCH_SIZE)
+        scale_loss = tf.reduce_sum(loss) * (1.0 / self.global_batch_size)
         return scale_loss
 
     def passage_forward(self, X):
