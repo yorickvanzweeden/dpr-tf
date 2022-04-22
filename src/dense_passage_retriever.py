@@ -32,20 +32,22 @@ from transformers import TFAutoModel
 
 
 class QueryModel(tf.keras.Model):
-    """Query Model"""
 
     def __init__(self, model_config, from_pt=False, **kwargs):
         super().__init__(**kwargs)
         # Load Pretrained models
-        self.query_encoder = TFAutoModel.from_pretrained(model_config.model_name, from_pt=from_pt)
+        self.query_encoder = TFAutoModel.from_pretrained(model_config.model_name, from_pt=from_pt).encoder
+        self.flatten = layers.Flatten()
+        self.last_dense = layers.Dense(768)
         # Add dropout layer
         self.dropout = layers.Dropout(model_config.dropout)
 
     def call(self, inputs, training=False, **kwargs):
-
-        pooled_output = self.query_encoder(inputs, training=training, **kwargs)[1]
-        pooled_output = self.dropout(pooled_output, training=training)
-        return pooled_output
+        output = self.query_encoder(inputs, training=training, **kwargs)[0]
+        output = self.flatten(output)
+        output = self.last_dense(output, training=training)
+        output = self.dropout(output, training=training)
+        return output
 
 
 class PassageModel(tf.keras.Model):
@@ -54,15 +56,18 @@ class PassageModel(tf.keras.Model):
     def __init__(self, model_config, from_pt=False, **kwargs):
         super().__init__(**kwargs)
         # Load Pretrained models
-        self.passage_encoder = TFAutoModel.from_pretrained(model_config.model_name, from_pt=from_pt)
+        self.passage_encoder = TFAutoModel.from_pretrained(model_config.model_name, from_pt=from_pt).encoder
+        self.flatten = layers.Flatten()
+        self.last_dense = layers.Dense(768)
         # Add dropout layer
         self.dropout = layers.Dropout(model_config.dropout)
 
     def call(self, inputs, training=False, **kwargs):
-
-        pooled_output = self.passage_encoder(inputs, training=training, **kwargs)[1]
-        pooled_output = self.dropout(pooled_output, training=training)
-        return pooled_output
+        output = self.passage_encoder(inputs, training=training, **kwargs)[0]
+        output = self.flatten(output)
+        output = self.last_dense(output, training=training)
+        output = self.dropout(output, training=training)
+        return output
 
 
 def cross_replica_concat(values):
@@ -114,11 +119,6 @@ class BiEncoderModel(tf.keras.Model):
 
     def calculate_loss(self, logits):
         """Function to calculate in batch loss"""
-
-        # Get no of queries from global batch size
-        num_queries = tf.shape(logits)[0]
-        # Get no of passages from global batch size
-        num_candidates = tf.shape(logits)[1]
 
         # Make In-Batch Labels:
         # Given single quetion positives are placed first followed by negatives.
