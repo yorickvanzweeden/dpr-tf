@@ -38,7 +38,7 @@ class QueryModel(tf.keras.Model):
 
     def call(self, inputs, training=False, **kwargs):
 
-        pooled_output = self.query_encoder(inputs, training=training, **kwargs)[1]
+        pooled_output = self.query_encoder(inputs, training=training, **kwargs)[0][:, 0]
         pooled_output = self.dropout(pooled_output, training=training)
         return pooled_output
 
@@ -55,7 +55,7 @@ class PassageModel(tf.keras.Model):
 
     def call(self, inputs, training=False, **kwargs):
 
-        pooled_output = self.passage_encoder(inputs, training=training, **kwargs)[1]
+        pooled_output = self.passage_encoder(inputs, training=training, **kwargs)[0][:,0]
         pooled_output = self.dropout(pooled_output, training=training)
         return pooled_output
 
