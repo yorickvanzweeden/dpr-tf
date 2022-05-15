@@ -136,7 +136,7 @@ class BiEncoderModel(tf.keras.Model):
         # Make In-Batch Labels:
         # Given single quetion positives are placed first followed by negatives.
 
-        labels = [[0 for _ in range(self.global_batch_size)] for _ in range(self.global_batch_size * self.num_questions_per_passage)]
+        labels = [[0 for _ in range(self.global_batch_size * self.num_questions_per_passage)] for _ in range(self.global_batch_size)]
         for i in range(self.global_batch_size):
             labels[i][i * 2] = 1
             labels[i][i * 2 + 1] = 0.3
@@ -206,7 +206,7 @@ class BiEncoderModel(tf.keras.Model):
 
             # Dot product similarity
             similarity_scores = tf.linalg.matmul(
-                combined_embeddings, global_passage_embeddings, transpose_b=True
+                global_passage_embeddings, combined_embeddings, transpose_b=True
             )
 
             typo_scores = tf.linalg.matmul(
