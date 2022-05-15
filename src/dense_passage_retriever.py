@@ -202,7 +202,7 @@ class BiEncoderModel(tf.keras.Model):
             # Interleave partials
             total_len = global_query_embeddings.shape[0] + global_partialcredit_embeddings.shape[0]
             combined_embeddings = tf.dynamic_stitch([range(0, total_len, 2), range(1, total_len + 1, 2)],
-                                                    [query_embeddings, partialcredit_embeddings])
+                                                    [global_query_embeddings, global_partialcredit_embeddings])
 
             # Dot product similarity
             similarity_scores = tf.linalg.matmul(
