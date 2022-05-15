@@ -136,10 +136,10 @@ class BiEncoderModel(tf.keras.Model):
         # Make In-Batch Labels:
         # Given single quetion positives are placed first followed by negatives.
 
-        labels = [[0 for _ in range(self.global_batch_size * self.num_questions_per_passage)] for _ in range(self.global_batch_size)]
+        labels = [[0 for _ in range(self.global_batch_size)] for _ in range(self.global_batch_size * self.num_questions_per_passage)]
         for i in range(self.global_batch_size):
             labels[i][i * 2] = 1
-            labels[i][i * 2 + 1] = 0.5
+            labels[i][i * 2 + 1] = 0.3
         labels = tf.convert_to_tensor(labels)
 
         loss = self.loss_fn2(labels, logits)
