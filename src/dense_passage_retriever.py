@@ -196,10 +196,11 @@ class BiEncoderModel(tf.keras.Model):
             # Get all replica concat values for In-Batch loss calculation
             global_passage_embeddings = cross_replica_concat(passage_embeddings)
             global_query_embeddings = cross_replica_concat(query_embeddings)
+            global_partialcredit_embeddings = cross_replica_concat(partialcredit_embeddings)
             global_typo_embeddings = cross_replica_concat(typo_embeddings)
 
             # Interleave partials
-            total_len = query_embeddings.shape[0] + partialcredit_embeddings.shape[0]
+            total_len = global_query_embeddings.shape[0] + global_partialcredit_embeddings.shape[0]
             combined_embeddings = tf.dynamic_stitch([range(0, total_len, 2), range(1, total_len + 1, 2)],
                                                     [query_embeddings, partialcredit_embeddings])
 
