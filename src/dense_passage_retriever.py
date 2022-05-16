@@ -32,7 +32,7 @@ class QueryModel(tf.keras.Model):
     def __init__(self, model_config, from_pt=False, **kwargs):
         super().__init__(**kwargs)
         # Load Pretrained models
-        self.query_encoder = TFAutoModel.from_pretrained(model_config.model_name, from_pt=from_pt)
+        self.query_encoder = TFAutoModel.from_pretrained(model_config.query_model_name, from_pt=from_pt)
         # Add dropout layer
         self.dropout = layers.Dropout(model_config.dropout)
 
@@ -49,7 +49,7 @@ class PassageModel(tf.keras.Model):
     def __init__(self, model_config, from_pt=False, **kwargs):
         super().__init__(**kwargs)
         # Load Pretrained models
-        self.passage_encoder = TFAutoModel.from_pretrained(model_config.model_name, from_pt=from_pt)
+        self.passage_encoder = TFAutoModel.from_pretrained(model_config.passage_model_name, from_pt=from_pt)
         # Add dropout layer
         self.dropout = layers.Dropout(model_config.dropout)
 
